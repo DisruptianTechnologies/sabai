@@ -13,8 +13,10 @@
   },
   "dependencies": {
     "@google-cloud/storage": "^7.19.0",
-    "@google/genai": "^1.29.0",
+    "@google/genai": "^3.0.0",
     "@tailwindcss/vite": "^4.1.14",
+    "@types/qrcode": "^1.5.6",
+    "@types/three": "^0.187.0",
     "@vitejs/plugin-react": "^5.0.4",
     "archiver": "^8.0.0",
     "dotenv": "^17.2.3",
@@ -28,10 +30,13 @@
     "motion": "^12.23.24",
     "multer": "^2.2.0",
     "pako": "^2.1.0",
+    "qrcode": "^1.5.4",
     "react": "^19.0.1",
     "react-dom": "^19.0.1",
     "react-markdown": "^10.1.0",
+    "recharts": "^3.10.1",
     "remark-gfm": "^4.0.1",
+    "three": "^0.187.0",
     "vite": "^6.2.3"
   },
   "devDependencies": {

@@ -8,7 +8,136 @@ import autoTable from 'jspdf-autotable';
 import type {
   ActivityLog, AnalysisReport, ReportChart, ReportTable, UploadedFile,
 } from './types';
-import { LogIn, LogOut, User as UserIcon, Check, Sparkles, Presentation, Database } from 'lucide-react';
+import {
+  LogIn,
+  LogOut,
+  User as UserIcon,
+  Check,
+  Sparkles,
+  Presentation,
+  Database,
+  TrendingUp,
+  LineChart as LineChartIcon,
+  BarChart3,
+  Flame,
+  Share2,
+  Heart,
+  QrCode,
+  Globe2,
+  Download,
+  FileSpreadsheet,
+  Lock,
+} from 'lucide-react';
+import { TimeSeriesTrendChart } from './components/TimeSeriesTrendChart';
+import { InfographicModal } from './components/InfographicModal';
+import { SocialPublishModal } from './components/SocialPublishModal';
+import { SabaiBrandHero3D } from './components/SabaiBrandHero3D';
+import { SabaiDonateModal } from './components/SabaiDonateModal';
+import {
+  AnalysisAuthGate,
+  AuthAndSheetsModal,
+} from './components/AuthGateAndAuditModal';
+import {
+  initAuth,
+  logout,
+  getAccessToken,
+  syncLoginEntriesToGoogleSheet,
+  type AuthenticatedAnalyst,
+} from './lib/authAndSheets';
+import {
+  isTimeSeriesTable,
+  extractTimeSeriesFromTable,
+  matchChartToTimeSeriesTable,
+  calculateTrendLine,
+  type ExtractedTimeSeries,
+} from './lib/timeSeriesDetector';
+
+export const SAMPLE_TREND_REPORT: AnalysisReport = {
+  dataset_name: 'Monthly SaaS Revenue & Growth',
+  question: 'Analyze monthly revenue trajectory, calculate the linear trend line, and project next quarter performance.',
+  title: 'Executive Analysis: 2024 Revenue Trajectory & Growth Trend',
+  executive_summary: 'The analysis shows strong and sustained upward momentum across all four quarters of 2024. Monthly recurring revenue expanded by +115.3% from $42,500 in January to $91,500 in December, maintaining an average growth rate of +$4,450/month with an exceptionally high regression goodness-of-fit (R² = 0.98). Active users doubled from 12.4k to 25.0k, indicating consistent net subscriber retention and favorable unit economics.',
+  insights: [
+    {
+      title: 'Accelerating Revenue Momentum',
+      metric: 'Monthly Growth Rate',
+      value: '+$4,450 / mo',
+      detail: 'Consistent monthly compounding with peak revenue of $91,500 achieved in December.',
+    },
+    {
+      title: 'High Model Fit (R²)',
+      metric: 'Trend Determination',
+      value: 'R² = 0.98',
+      detail: 'Linear regression shows near-perfect correlation, supporting reliable forward projections.',
+    },
+    {
+      title: 'Active User Expansion',
+      metric: 'User Base Growth',
+      value: '+101.6%',
+      detail: 'Active accounts scaled from 12,400 to 25,000 without churn spikes.',
+    },
+    {
+      title: 'Lowest Churn Rate',
+      metric: 'Year-End Churn',
+      value: '1.2%',
+      detail: 'Subscriber churn improved continuously from 2.1% in Q1 down to 1.2% in Q4.',
+    },
+  ],
+  charts: [
+    {
+      title: 'Monthly Revenue Trend',
+      file: 'charts/monthly_revenue_trend.png',
+      caption: 'Monthly revenue growth curve paired with automated OLS regression trend line and moving average smoothing.',
+      type: 'line',
+      isTimeSeries: true,
+    },
+    {
+      title: 'Active Users Growth',
+      file: 'charts/active_users_growth.png',
+      caption: 'Active user trajectory with linear projection over 12 billing periods.',
+      type: 'line',
+      isTimeSeries: true,
+    },
+  ],
+  tables: [
+    {
+      title: 'Monthly Revenue Trend',
+      caption: 'Consolidated performance metrics by month for calendar year 2024.',
+      columns: ['Month', 'Revenue', 'Active_Users', 'New_Subscriptions', 'Churn_Rate'],
+      rows: [
+        ['2024-01', 42500, 12400, 850, 2.1],
+        ['2024-02', 46800, 13100, 920, 1.9],
+        ['2024-03', 51200, 14050, 1050, 1.8],
+        ['2024-04', 49800, 14400, 980, 2.0],
+        ['2024-05', 56200, 15600, 1200, 1.7],
+        ['2024-06', 61400, 16900, 1340, 1.6],
+        ['2024-07', 67800, 18300, 1480, 1.5],
+        ['2024-08', 72100, 19500, 1590, 1.5],
+        ['2024-09', 70400, 20100, 1510, 1.7],
+        ['2024-10', 78900, 21800, 1780, 1.4],
+        ['2024-11', 84300, 23200, 1920, 1.3],
+        ['2024-12', 91500, 25000, 2100, 1.2],
+      ],
+    },
+    {
+      title: 'Quarterly Summary',
+      caption: 'Quarterly aggregate totals and period-over-period expansion.',
+      columns: ['Quarter', 'Total_Revenue', 'Avg_Monthly_Users', 'Total_New_Subs'],
+      rows: [
+        ['2024-Q1', 140500, 13183, 2820],
+        ['2024-Q2', 167400, 15633, 3520],
+        ['2024-Q3', 210300, 19300, 4580],
+        ['2024-Q4', 254700, 23333, 5800],
+      ],
+    },
+  ],
+  recommendations: [
+    'Leverage the strong R² = 0.98 trend line to forecast Q1 2025 revenue at ~$98k–$105k monthly run-rate.',
+    'Increase customer acquisition budget in high-converting channels identified during Q3 and Q4.',
+    'Continue retention initiatives that drove churn down to a historic low of 1.2%.',
+  ],
+  generated_at: '2024-12-31',
+};
 
 const PixelatedHeader: React.FC = () => {
   return (
@@ -760,22 +889,173 @@ const App: React.FC = () => {
     });
   };
 
+  const loadSampleCsv = () => {
+    const csvContent = `Month,Revenue,Active_Users,New_Subscriptions,Churn_Rate
+2024-01,42500,12400,850,2.1
+2024-02,46800,13100,920,1.9
+2024-03,51200,14050,1050,1.8
+2024-04,49800,14400,980,2.0
+2024-05,56200,15600,1200,1.7
+2024-06,61400,16900,1340,1.6
+2024-07,67800,18300,1480,1.5
+2024-08,72100,19500,1590,1.5
+2024-09,70400,20100,1510,1.7
+2024-10,78900,21800,1780,1.4
+2024-11,84300,23200,1920,1.3
+2024-12,91500,25000,2100,1.2`;
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const file = new File([blob], 'monthly_saas_metrics.csv', { type: 'text/csv' });
+    addFiles([file]);
+    setQuestion('Analyze the monthly revenue and active user trends over time, identify growth trajectory, and highlight key drivers.');
+  };
+
+  const loadSampleReport = () => {
+    setReport(SAMPLE_TREND_REPORT);
+    setChatMessages([
+      {
+        id: 'sample-user-msg',
+        role: 'user',
+        text: SAMPLE_TREND_REPORT.question,
+      },
+      {
+        id: 'sample-assistant-msg',
+        role: 'assistant',
+        text: 'Autonomous analysis completed. The time-series trend line, regression fit (R² = 0.98), and moving averages have been calculated and visualized in the interactive Recharts dashboard.',
+        status: 'done',
+        report: SAMPLE_TREND_REPORT,
+      },
+    ]);
+    setViewedMessageId('sample-assistant-msg');
+  };
+
+  const [isDonateModalOpen, setIsDonateModalOpen] = useState(false);
+  const [currentUser, setCurrentUser] = useState<AuthenticatedAnalyst | null>(null);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+
+  useEffect(() => {
+    const unsubscribe = initAuth(
+      (fbUser, token) => {
+        setCurrentUser((prev) => {
+          if (prev && prev.uid === fbUser.uid) {
+            return { ...prev, hasSheetsToken: Boolean(token) };
+          }
+          return {
+            uid: fbUser.uid,
+            email: fbUser.email || 'analyst@sabaifoundation.org',
+            displayName:
+              fbUser.displayName ||
+              (fbUser.email ? fbUser.email.split('@')[0] : 'SABAI Analyst'),
+            photoURL: fbUser.photoURL,
+            provider: token ? 'Google OAuth' : 'Email & Password (Firebase)',
+            hasSheetsToken: Boolean(token),
+          };
+        });
+      },
+      () => {
+        // Keep MCP Vault session if active, otherwise clear Firebase user
+        setCurrentUser((prev) =>
+          prev?.provider === 'Email & Password (MCP Vault)' ? prev : null
+        );
+      }
+    );
+    return () => unsubscribe();
+  }, []);
+
+  const handleSignOut = async () => {
+    await logout();
+    setCurrentUser(null);
+  };
+
   return (
     <div className="min-h-screen w-full bg-[#f6f5f3] text-neutral-900 font-sans flex flex-col pb-12">
-      <PixelatedHeader />
-
-      {/* Navigation / User Profile Header */}
-      <header className="mx-auto max-w-screen-2xl w-full px-6 pt-4 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <span className="h-2.5 w-2.5 rounded-full bg-io-blue" />
-          <span className="text-sm font-semibold tracking-wider uppercase text-neutral-500 font-mono">Data Analyst Workspace</span>
-        </div>
-        
+      {/* Top SABAI Foundation Navigation Header */}
+      <header className="mx-auto max-w-screen-2xl w-full px-4 sm:px-6 pt-4 pb-1 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
+          <div className="h-10 w-10 rounded-2xl bg-[#090d16] border border-neutral-800 flex items-center justify-center text-amber-400 shadow-xs shrink-0">
+            <Globe2 className="h-5 w-5" />
+          </div>
+          <div>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-sm sm:text-base font-extrabold tracking-tight text-neutral-900">
+                SABAI Foundation
+              </span>
+              <span className="text-neutral-300">·</span>
+              <span className="text-xs font-mono uppercase tracking-wider text-indigo-700 font-semibold">
+                Data Storytelling & Civic BI
+              </span>
+            </div>
+            <p className="text-[11px] sm:text-xs text-neutral-600 font-medium">
+              Society for Awareness and Better Access to Information
+            </p>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2.5">
+          {(report || status === 'running') && (
+            <button
+              type="button"
+              onClick={reset}
+              className="rounded-xl border border-neutral-300 bg-white hover:bg-neutral-100 px-3.5 py-2 text-xs font-semibold text-neutral-800 transition cursor-pointer whitespace-nowrap shrink-0"
+            >
+              Workspace Home
+            </button>
+          )}
+
+          {/* Auth & Google Sheets Audit Log Button */}
+          {currentUser ? (
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => setIsAuthModalOpen(true)}
+                className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 px-3.5 py-2 text-xs font-semibold text-emerald-900 transition cursor-pointer whitespace-nowrap shrink-0"
+                title="View Google Sheets Login Audit Log"
+              >
+                <FileSpreadsheet className="h-4 w-4 text-emerald-600" />
+                <span>{currentUser.displayName}</span>
+                <span className="text-emerald-400">·</span>
+                <span className="font-mono text-[11px]">Sheets Audit</span>
+              </button>
+              <button
+                type="button"
+                onClick={handleSignOut}
+                className="rounded-xl border border-neutral-200 bg-white hover:bg-neutral-100 p-2 text-neutral-600 hover:text-neutral-900 transition cursor-pointer shrink-0"
+                title="Sign Out"
+              >
+                <LogOut className="h-4 w-4" />
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setIsAuthModalOpen(true)}
+              className="flex items-center gap-2 rounded-xl border border-neutral-300 bg-white hover:bg-neutral-100 px-3.5 py-2 text-xs sm:text-sm font-semibold text-neutral-800 shadow-2xs transition cursor-pointer whitespace-nowrap shrink-0"
+            >
+              <LogIn className="h-4 w-4 text-io-blue" />
+              <span>Sign In · Sheets Audit</span>
+            </button>
+          )}
+
+          <button
+            type="button"
+            onClick={() => setIsDonateModalOpen(true)}
+            className="flex items-center gap-2 rounded-xl bg-amber-500 hover:bg-amber-400 border border-amber-600/20 px-4 py-2 text-xs sm:text-sm font-bold text-neutral-950 shadow-xs transition cursor-pointer whitespace-nowrap shrink-0"
+          >
+            <Heart className="h-4 w-4 fill-neutral-950 text-neutral-950" />
+            <span>Donate Now</span>
+            <QrCode className="h-4 w-4 text-neutral-900/80" />
+          </button>
         </div>
       </header>
 
-      <main className="mx-auto max-w-screen-2xl w-full px-6 pt-6">
+      {/* 3D Three.js Interactive SABAI Foundation Brand Hero */}
+      {(status === 'idle' || status === 'uploading') && !report && (
+        <SabaiBrandHero3D
+          onOpenDonate={() => setIsDonateModalOpen(true)}
+          onLoadSampleReport={loadSampleReport}
+        />
+      )}
+
+      <main className="mx-auto max-w-screen-2xl w-full px-4 sm:px-6 pt-6 flex-1">
         <AnimatePresence mode="wait">
           {(status === 'idle' || status === 'uploading') && !report ? (
             <motion.div
@@ -802,6 +1082,8 @@ const App: React.FC = () => {
                 onRemoveFile={removeFile}
                 onQuestionChange={setQuestion}
                 onRun={runAnalysis}
+                onLoadSampleReport={loadSampleReport}
+                onLoadSampleCsv={loadSampleCsv}
               />
             </motion.div>
           ) : (
@@ -820,39 +1102,103 @@ const App: React.FC = () => {
                 onReset={reset}
               />
               {errorMsg && <ErrorBanner message={errorMsg} />}
-              <div className="flex flex-col lg:flex-row gap-6 items-start">
-                <div className="w-full lg:w-[360px] xl:w-[420px] shrink-0 lg:sticky lg:top-6">
-                  <AgentPanel
-                    messages={chatMessages}
-                    logs={logs}
-                    status={status}
-                    stage={stage}
-                    viewedMessageId={viewedMessageId}
-                    onSelectMessage={selectMessage}
-                    onSendFollowUp={(text) => runAnalysis(text)}
-                    report={report}
-                    datasetName={datasetName}
-                  />
+
+              {!currentUser ? (
+                <AnalysisAuthGate
+                  report={report}
+                  datasetName={datasetName}
+                  question={question}
+                  isRunning={status === 'running'}
+                  stage={stage}
+                  onAuthenticated={(analyst) => setCurrentUser(analyst)}
+                />
+              ) : (
+                <div className="flex flex-col lg:flex-row gap-6 items-start">
+                  <div className="w-full lg:w-[360px] xl:w-[420px] shrink-0 lg:sticky lg:top-6">
+                    <AgentPanel
+                      messages={chatMessages}
+                      logs={logs}
+                      status={status}
+                      stage={stage}
+                      viewedMessageId={viewedMessageId}
+                      onSelectMessage={selectMessage}
+                      onSendFollowUp={(text) => runAnalysis(text)}
+                      report={report}
+                      datasetName={datasetName}
+                    />
+                  </div>
+                  <div className="flex-1 w-full min-w-0">
+                    {report ? (
+                      <ReportView report={report} />
+                    ) : (
+                      status === 'running' && (
+                        <div className="flex h-[60vh] flex-col items-center justify-center rounded-2xl border border-dashed border-neutral-300 bg-neutral-50/50 p-8 text-center shadow-sm">
+                          <p className="text-base font-medium text-neutral-700">Report will be generated here</p>
+                          <p className="mt-1.5 max-w-sm text-sm text-neutral-500">
+                            The agent is exploring the data and running your analysis in the background. Your final report and charts will appear in this space when complete.
+                          </p>
+                        </div>
+                      )
+                    )}
+                  </div>
                 </div>
-                <div className="flex-1 w-full min-w-0">
-                  {report ? (
-                    <ReportView report={report} />
-                  ) : (
-                    status === 'running' && (
-                      <div className="flex h-[60vh] flex-col items-center justify-center rounded-2xl border border-dashed border-neutral-300 bg-neutral-50/50 p-8 text-center shadow-sm">
-                        <p className="text-base font-medium text-neutral-700">Report will be generated here</p>
-                        <p className="mt-1.5 max-w-sm text-sm text-neutral-500">
-                          The agent is exploring the data and running your analysis in the background. Your final report and charts will appear in this space when complete.
-                        </p>
-                      </div>
-                    )
-                  )}
-                </div>
-              </div>
+              )}
             </motion.div>
           )}
         </AnimatePresence>
       </main>
+
+      {/* SABAI Foundation Promoter Footer */}
+      <footer className="mx-auto max-w-screen-2xl w-full px-4 sm:px-6 pt-12">
+        <div className="rounded-2xl border border-neutral-200 bg-white px-6 py-5 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="space-y-1">
+            <div className="flex flex-wrap items-center gap-2 text-xs font-bold text-neutral-900">
+              <span>Promoted by SABAI Foundation</span>
+              <span className="text-neutral-300">·</span>
+              <span className="text-neutral-600 font-medium">
+                Society for Awareness and Better Access to Information
+              </span>
+            </div>
+            <p className="text-xs text-neutral-500">
+              Advancing open data literacy, transparent statistical journalism, and accessible AI data storytelling.
+            </p>
+          </div>
+          <div className="flex items-center gap-2.5 self-start sm:self-center">
+            <button
+              type="button"
+              onClick={() => setIsAuthModalOpen(true)}
+              className="flex items-center gap-2 rounded-xl border border-neutral-200 bg-neutral-50 hover:bg-neutral-100 px-3.5 py-2.5 text-xs font-semibold text-neutral-800 transition cursor-pointer whitespace-nowrap shrink-0"
+            >
+              <FileSpreadsheet className="h-4 w-4 text-emerald-600" />
+              <span>Google Sheets Login Audit</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsDonateModalOpen(true)}
+              className="flex items-center gap-2 rounded-xl bg-neutral-900 hover:bg-neutral-800 px-4 py-2.5 text-xs font-bold text-white transition cursor-pointer whitespace-nowrap shrink-0"
+            >
+              <QrCode className="h-4 w-4 text-amber-400" />
+              <span>Donate via QR Code</span>
+            </button>
+          </div>
+        </div>
+      </footer>
+
+      {/* Global QR Code Donation Modal */}
+      <SabaiDonateModal
+        isOpen={isDonateModalOpen}
+        onClose={() => setIsDonateModalOpen(false)}
+      />
+
+      {/* Identity Vault & Google Sheets Login Audit Modal */}
+      <AuthAndSheetsModal
+        isOpen={isAuthModalOpen}
+        onClose={() => setIsAuthModalOpen(false)}
+        currentUser={currentUser}
+        onUserChange={(u) => setCurrentUser(u)}
+        currentDatasetName={datasetName}
+        currentQuestion={question}
+      />
     </div>
   );
 };
@@ -874,12 +1220,14 @@ interface SetupProps {
   onRemoveFile: (name: string) => void;
   onQuestionChange: (v: string) => void;
   onRun: () => void;
+  onLoadSampleReport?: () => void;
+  onLoadSampleCsv?: () => void;
 }
 
 const SetupPanel: React.FC<SetupProps> = ({
   files, dragOver, question, examples, canRun, isUploading = false,
   onDragOver, onDragLeave, onDrop, onPickFiles, onAddGcsUri, onRemoveFile,
-  onQuestionChange, onRun
+  onQuestionChange, onRun, onLoadSampleReport, onLoadSampleCsv
 }) => {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [gcsInput, setGcsInput] = useState('');
@@ -942,6 +1290,39 @@ const SetupPanel: React.FC<SetupProps> = ({
                 disabled={isUploading}
                 onChange={(e) => onPickFiles(e.target.files)}
               />
+            </div>
+
+            {/* Quick Demo & Sample Data Shortcuts */}
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-2.5 px-3 py-2.5 rounded-xl bg-neutral-50 border border-neutral-200/80">
+              <span className="text-xs text-neutral-600 font-medium flex items-center gap-1.5">
+                <TrendingUp className="h-4 w-4 text-io-blue" />
+                <span>Automatic trend line visualization ready for time-series data</span>
+              </span>
+              <div className="flex items-center gap-2">
+                {onLoadSampleCsv && (
+                  <button
+                    type="button"
+                    disabled={isUploading}
+                    onClick={onLoadSampleCsv}
+                    className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-white border border-neutral-200 text-neutral-700 hover:bg-neutral-100 transition cursor-pointer"
+                    title="Load sample monthly revenue & active users CSV"
+                  >
+                    ⚡ Sample Time-Series CSV
+                  </button>
+                )}
+                {onLoadSampleReport && (
+                  <button
+                    type="button"
+                    disabled={isUploading}
+                    onClick={onLoadSampleReport}
+                    className="px-3 py-1 text-xs font-semibold rounded-lg bg-io-blue text-white hover:bg-blue-600 transition flex items-center gap-1 cursor-pointer shadow-2xs"
+                    title="Preview interactive dashboard with automated Recharts trend line"
+                  >
+                    <Sparkles className="h-3 w-3" />
+                    <span>View Interactive Trend Report</span>
+                  </button>
+                )}
+              </div>
             </div>
 
             {/* GCS Link input for files larger than 1MB */}
@@ -1614,10 +1995,94 @@ const ReportView: React.FC<{ report: AnalysisReport }> = ({ report }) => {
   const [zoomedChart, setZoomedChart] = useState<ReportChart | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [isExportingPdf, setIsExportingPdf] = useState(false);
+  const [isInfographicModalOpen, setIsInfographicModalOpen] = useState(false);
+  const [isSocialModalOpen, setIsSocialModalOpen] = useState(false);
+  const [isReportDonateOpen, setIsReportDonateOpen] = useState(false);
 
-  const validCharts = useMemo(() => {
-    return report.charts?.filter((c) => c.image) || [];
-  }, [report.charts]);
+  // Process all time-series data and charts using Recharts
+  const { allDisplayCharts, timeSeriesMap } = useMemo(() => {
+    const tsMap = new Map<string, ExtractedTimeSeries>();
+
+    // 1. Extract time series from all report tables
+    const tableTsList: Array<{ table: ReportTable; ts: ExtractedTimeSeries }> = [];
+    if (report.tables) {
+      for (const tbl of report.tables) {
+        const ts = extractTimeSeriesFromTable(tbl);
+        if (ts) {
+          tableTsList.push({ table: tbl, ts });
+        }
+      }
+    }
+
+    const chartsList: ReportChart[] = [];
+    const matchedTableTitles = new Set<string>();
+
+    if (report.charts && report.charts.length > 0) {
+      for (const c of report.charts) {
+        let matchedTs: ExtractedTimeSeries | null = null;
+
+        // Check if chart has embedded structured data
+        if (c.data && c.timeKey && c.metricKeys && c.data.length > 1) {
+          const primaryMetric = c.metricKeys[0];
+          const rawSeries = c.data.map((p) => ({
+            ...p,
+            label: String(p[c.timeKey!]),
+            value: typeof p[primaryMetric] === 'number' ? (p[primaryMetric] as number) : 0,
+          }));
+          const { processedPoints, stats } = calculateTrendLine(rawSeries);
+          matchedTs = {
+            title: c.title,
+            timeKey: c.timeKey,
+            metricKeys: c.metricKeys,
+            points: processedPoints,
+            statsByMetric: { [primaryMetric]: stats },
+          };
+        } else {
+          // Check matching table in report.tables
+          const matchedTbl = matchChartToTimeSeriesTable(c, report.tables || []);
+          if (matchedTbl) {
+            matchedTs = extractTimeSeriesFromTable(matchedTbl);
+            matchedTableTitles.add(matchedTbl.title);
+          }
+        }
+
+        if (matchedTs) {
+          tsMap.set(c.title, matchedTs);
+          if (c.file) tsMap.set(c.file, matchedTs);
+        }
+
+        if (c.image || matchedTs) {
+          chartsList.push({
+            ...c,
+            isTimeSeries: !!matchedTs || c.isTimeSeries,
+          });
+        }
+      }
+    }
+
+    // 2. Also ensure any time-series tables that weren't represented in report.charts are included as automated trend charts!
+    for (const { table, ts } of tableTsList) {
+      if (!matchedTableTitles.has(table.title)) {
+        const autoChart: ReportChart = {
+          title: table.title,
+          file: `auto_trend_${table.title.toLowerCase().replace(/[^a-z0-9]/g, '_')}`,
+          caption: table.caption || `Automated time-series trend analysis from ${table.title}`,
+          type: 'line',
+          isTimeSeries: true,
+        };
+        tsMap.set(autoChart.title, ts);
+        tsMap.set(autoChart.file, ts);
+        chartsList.push(autoChart);
+      }
+    }
+
+    return { allDisplayCharts: chartsList, timeSeriesMap: tsMap };
+  }, [report.charts, report.tables]);
+
+  const validCharts = allDisplayCharts;
+  const zoomedTimeSeries = zoomedChart
+    ? timeSeriesMap.get(zoomedChart.title) || (zoomedChart.file ? timeSeriesMap.get(zoomedChart.file) : null)
+    : null;
 
   const downloadJson = () => {
     const blob = new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' });
@@ -1759,9 +2224,9 @@ const ReportView: React.FC<{ report: AnalysisReport }> = ({ report }) => {
         y += 4;
       }
 
-      // Charts
-      const validCharts = report.charts?.filter((c) => c.image) || [];
-      if (validCharts.length > 0) {
+      // Charts for PDF
+      const validPdfCharts = report.charts?.filter((c) => c.image) || [];
+      if (validPdfCharts.length > 0) {
         checkPageBreak(30);
         pdf.setFont('helvetica', 'bold');
         pdf.setFontSize(13);
@@ -1769,7 +2234,7 @@ const ReportView: React.FC<{ report: AnalysisReport }> = ({ report }) => {
         pdf.text('Visual Analytics', margin, y);
         y += 8;
 
-        for (const chart of validCharts) {
+        for (const chart of validPdfCharts) {
           checkPageBreak(40);
 
           pdf.setFont('helvetica', 'bold');
@@ -1788,7 +2253,7 @@ const ReportView: React.FC<{ report: AnalysisReport }> = ({ report }) => {
           }
 
           try {
-            let imageSourceUrl = chart.image;
+            let imageSourceUrl = chart.image!;
             if (imageSourceUrl.startsWith('/') || imageSourceUrl.startsWith('http')) {
               try {
                 const res = await fetch(imageSourceUrl);
@@ -1972,6 +2437,12 @@ const ReportView: React.FC<{ report: AnalysisReport }> = ({ report }) => {
                   {report.generated_at}
                 </span>
               )}
+              {timeSeriesMap.size > 0 && (
+                <span className="rounded-full bg-emerald-50 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-700 border border-emerald-200 flex items-center gap-1">
+                  <TrendingUp className="h-3 w-3" />
+                  Recharts Trend Analysis
+                </span>
+              )}
             </div>
             <h2 className="mt-2 text-2xl sm:text-3xl font-bold tracking-tight text-neutral-900 font-sans">
               {report.title}
@@ -1983,19 +2454,43 @@ const ReportView: React.FC<{ report: AnalysisReport }> = ({ report }) => {
           </div>
 
           {/* Action Tools */}
-          <div className="flex items-center gap-2.5 shrink-0 self-start md:self-center">
+          <div className="flex flex-wrap items-center gap-2.5 shrink-0 self-start md:self-center">
+            <button
+              type="button"
+              onClick={() => setIsSocialModalOpen(true)}
+              className="flex items-center gap-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition cursor-pointer whitespace-nowrap shrink-0"
+            >
+              <Share2 className="h-4 w-4 text-indigo-100" />
+              <span>Publish to Social Media</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsInfographicModalOpen(true)}
+              className="flex items-center gap-2 rounded-xl bg-neutral-900 hover:bg-neutral-800 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition cursor-pointer whitespace-nowrap shrink-0"
+            >
+              <Presentation className="h-4 w-4 text-sky-400" />
+              <span>Design Infographic</span>
+            </button>
             <button
               onClick={exportDashboardToPDF}
               disabled={isExportingPdf}
-              className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-io-blue to-io-red px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:opacity-95 disabled:opacity-60 cursor-pointer"
+              className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-io-blue to-io-red px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:opacity-95 disabled:opacity-60 cursor-pointer whitespace-nowrap shrink-0"
             >
               {isExportingPdf ? 'Rendering PDF...' : 'Download PDF'}
             </button>
             <button
               onClick={downloadJson}
-              className="flex items-center gap-1.5 rounded-xl border border-neutral-200 bg-neutral-50 px-3.5 py-2.5 text-sm font-medium text-neutral-700 transition hover:bg-neutral-100 cursor-pointer"
+              className="flex items-center gap-1.5 rounded-xl border border-neutral-200 bg-neutral-50 px-3.5 py-2.5 text-sm font-medium text-neutral-700 transition hover:bg-neutral-100 cursor-pointer whitespace-nowrap shrink-0"
             >
               JSON
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsReportDonateOpen(true)}
+              className="flex items-center gap-2 rounded-xl bg-amber-500 hover:bg-amber-400 px-4 py-2.5 text-sm font-bold text-neutral-950 shadow-sm transition cursor-pointer whitespace-nowrap shrink-0"
+            >
+              <QrCode className="h-4 w-4 text-neutral-950" />
+              <span>Donate Now</span>
             </button>
           </div>
         </div>
@@ -2077,7 +2572,12 @@ const ReportView: React.FC<{ report: AnalysisReport }> = ({ report }) => {
               </div>
               <div className="grid gap-4 sm:grid-cols-2">
                 {validCharts.slice(0, 2).map((c, i) => (
-                  <ChartCard key={i} chart={c} onZoom={() => setZoomedChart(c)} />
+                  <ChartCard
+                    key={i}
+                    chart={c}
+                    timeSeries={timeSeriesMap.get(c.title) || (c.file ? timeSeriesMap.get(c.file) : null)}
+                    onZoom={() => setZoomedChart(c)}
+                  />
                 ))}
                 {validCharts.length === 0 && (
                   <p className="col-span-2 p-8 text-center text-sm text-neutral-400 bg-white rounded-xl border border-neutral-200">
@@ -2115,12 +2615,25 @@ const ReportView: React.FC<{ report: AnalysisReport }> = ({ report }) => {
       {activeTab === 'charts' && (
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <SectionTitle title={`All Visualizations (${validCharts.length})`} />
+            <div className="flex items-center gap-2.5">
+              <SectionTitle title={`All Visualizations (${validCharts.length})`} />
+              {timeSeriesMap.size > 0 && (
+                <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-50 text-io-blue border border-blue-200 flex items-center gap-1">
+                  <TrendingUp className="h-3 w-3" />
+                  {timeSeriesMap.size} Recharts Trend {timeSeriesMap.size === 1 ? 'Line' : 'Lines'} Active
+                </span>
+              )}
+            </div>
             <span className="text-xs text-neutral-500">Click any chart to inspect in full resolution</span>
           </div>
           <div className="grid gap-6 sm:grid-cols-2">
             {validCharts.map((c, i) => (
-              <ChartCard key={i} chart={c} onZoom={() => setZoomedChart(c)} />
+              <ChartCard
+                key={i}
+                chart={c}
+                timeSeries={timeSeriesMap.get(c.title) || (c.file ? timeSeriesMap.get(c.file) : null)}
+                onZoom={() => setZoomedChart(c)}
+              />
             ))}
             {validCharts.length === 0 && (
               <p className="col-span-2 p-12 text-center text-sm text-neutral-400 bg-white rounded-xl border border-neutral-200">
@@ -2267,9 +2780,28 @@ const ReportView: React.FC<{ report: AnalysisReport }> = ({ report }) => {
             <div className="grid grid-cols-1 gap-8">
               {validCharts.map((c, idx) => (
                 <div key={idx} className="border border-neutral-200 rounded-xl p-6 bg-white break-inside-avoid">
-                  <h3 className="text-base font-bold text-neutral-800 mb-1">{c.title}</h3>
-                  {c.caption && <p className="text-xs text-neutral-500 mb-4">{c.caption}</p>}
-                  <ChartImage src={c.image} alt={c.title} className="w-full max-h-[480px] object-contain mx-auto" />
+                  <div className="flex items-start justify-between gap-3 mb-2">
+                    <div>
+                      <h3 className="text-base font-bold text-neutral-800">{c.title}</h3>
+                      {c.caption && <p className="text-xs text-neutral-500 mt-0.5">{c.caption}</p>}
+                    </div>
+                    {c.image && (
+                      <button
+                        type="button"
+                        onClick={() => downloadStaticChartImageAsPng(c.image!, c.title)}
+                        className="px-2.5 py-1.5 rounded-lg border border-neutral-200 bg-white hover:bg-neutral-100 text-neutral-700 text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer whitespace-nowrap shrink-0"
+                        title="Download chart as PNG"
+                      >
+                        <Download className="h-3.5 w-3.5 text-io-blue" />
+                        <span>Download Chart</span>
+                      </button>
+                    )}
+                  </div>
+                  {c.image ? (
+                    <ChartImage src={c.image} alt={c.title} className="w-full max-h-[480px] object-contain mx-auto mt-2" />
+                  ) : (
+                    <p className="text-xs text-neutral-400 italic">Rendered interactively in Recharts dashboard.</p>
+                  )}
                 </div>
               ))}
             </div>
@@ -2355,27 +2887,74 @@ const ReportView: React.FC<{ report: AnalysisReport }> = ({ report }) => {
               animate={{ scale: 1 }}
               exit={{ scale: 0.95 }}
               onClick={(e) => e.stopPropagation()}
-              className="bg-white rounded-2xl max-w-5xl w-full overflow-hidden shadow-2xl flex flex-col max-h-[90vh]"
+              className="bg-white rounded-2xl max-w-5xl w-full overflow-hidden shadow-2xl flex flex-col max-h-[92vh]"
             >
               <div className="flex items-center justify-between px-6 py-4 border-b border-neutral-100 bg-neutral-50">
                 <div>
-                  <h3 className="font-bold text-neutral-900 text-lg">{zoomedChart.title}</h3>
+                  <h3 className="font-bold text-neutral-900 text-lg flex items-center gap-2">
+                    <span>{zoomedChart.title}</span>
+                    {zoomedTimeSeries && (
+                      <span className="text-xs px-2 py-0.5 rounded-md bg-blue-100 text-io-blue font-semibold">
+                        Recharts Interactive Trend Line
+                      </span>
+                    )}
+                  </h3>
                   {zoomedChart.caption && <p className="text-xs text-neutral-500 mt-0.5">{zoomedChart.caption}</p>}
                 </div>
-                <button
-                  onClick={() => setZoomedChart(null)}
-                  className="rounded-xl px-3 py-1.5 text-xs font-semibold text-neutral-500 hover:bg-neutral-200 hover:text-neutral-700 transition cursor-pointer"
-                >
-                  Close
-                </button>
+                <div className="flex items-center gap-2 shrink-0">
+                  {!zoomedTimeSeries && zoomedChart.image && (
+                    <button
+                      type="button"
+                      onClick={() => downloadStaticChartImageAsPng(zoomedChart.image!, zoomedChart.title)}
+                      className="rounded-xl border border-neutral-200 bg-white hover:bg-neutral-100 px-3 py-1.5 text-xs font-semibold text-neutral-700 flex items-center gap-1.5 transition cursor-pointer whitespace-nowrap shrink-0"
+                    >
+                      <Download className="h-3.5 w-3.5 text-io-blue" />
+                      <span>Download Chart</span>
+                    </button>
+                  )}
+                  <button
+                    onClick={() => setZoomedChart(null)}
+                    className="rounded-xl px-3 py-1.5 text-xs font-semibold text-neutral-500 hover:bg-neutral-200 hover:text-neutral-700 transition cursor-pointer"
+                  >
+                    Close
+                  </button>
+                </div>
               </div>
-              <div className="p-6 overflow-auto flex-1 flex items-center justify-center bg-white">
-                <ChartImage src={zoomedChart.image} alt={zoomedChart.title} className="max-h-[75vh] w-auto object-contain mx-auto" />
+              <div className="p-6 overflow-auto flex-1 bg-white">
+                {zoomedTimeSeries ? (
+                  <TimeSeriesTrendChart
+                    timeSeries={zoomedTimeSeries}
+                    caption={zoomedChart.caption}
+                    height={480}
+                  />
+                ) : (
+                  <ChartImage src={zoomedChart.image || ''} alt={zoomedChart.title} className="max-h-[75vh] w-auto object-contain mx-auto" />
+                )}
               </div>
             </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* MCP Infographic Synthesis & Download Modal */}
+      <InfographicModal
+        isOpen={isInfographicModalOpen}
+        onClose={() => setIsInfographicModalOpen(false)}
+        report={report}
+      />
+
+      {/* Social Media Storytelling & Scheduling Agent Modal */}
+      <SocialPublishModal
+        isOpen={isSocialModalOpen}
+        onClose={() => setIsSocialModalOpen(false)}
+        report={report}
+      />
+
+      {/* SABAI Foundation QR Code Donation Modal */}
+      <SabaiDonateModal
+        isOpen={isReportDonateOpen}
+        onClose={() => setIsReportDonateOpen(false)}
+      />
     </div>
   );
 };
@@ -2423,28 +3002,176 @@ const ChartImage: React.FC<{ src: string; alt: string; className?: string }> = (
   return <img src={src} alt={alt} className={className} onError={() => setError(true)} />;
 };
 
-const ChartCard: React.FC<{ chart: ReportChart; onZoom?: () => void }> = ({ chart, onZoom }) => (
-  <figure className="overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm flex flex-col group transition hover:border-neutral-300">
-    <div className="relative bg-white p-3 flex-1 flex items-center justify-center min-h-[220px]">
-      <ChartImage src={chart.image} alt={chart.title} className="w-full h-auto max-h-72 object-contain mx-auto" />
-      {onZoom && (
-        <button
-          onClick={onZoom}
-          className="absolute right-3 top-3 opacity-0 group-hover:opacity-100 transition bg-neutral-900/70 hover:bg-neutral-900 text-white px-2.5 py-1.5 rounded-xl text-xs flex items-center shadow-md cursor-pointer"
-          title="Zoom Chart"
-        >
-          Zoom
-        </button>
-      )}
-    </div>
-    <figcaption className="border-t border-neutral-100 px-4 py-3 bg-neutral-50/50">
-      <p className="text-sm font-bold text-neutral-800">{chart.title}</p>
-      {chart.caption && <p className="mt-0.5 text-xs text-neutral-500 line-clamp-2">{chart.caption}</p>}
-    </figcaption>
-  </figure>
-);
+async function downloadStaticChartImageAsPng(imageUrl: string, title: string) {
+  if (!imageUrl) return;
+  const safeName =
+    (title || 'chart')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '_')
+      .replace(/^_|_$/g, '') || 'chart';
+
+  try {
+    let sourceUrl = imageUrl;
+    if (sourceUrl.startsWith('/') || sourceUrl.startsWith('http')) {
+      const res = await fetch(sourceUrl);
+      if (res.ok) {
+        const blob = await res.blob();
+        sourceUrl = URL.createObjectURL(blob);
+      }
+    }
+
+    await new Promise<void>((resolve, reject) => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.naturalWidth || 900;
+        canvas.height = img.naturalHeight || 600;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          ctx.drawImage(img, 0, 0);
+          const pngUrl = canvas.toDataURL('image/png');
+          const a = document.createElement('a');
+          a.href = pngUrl;
+          a.download = `${safeName}.png`;
+          a.click();
+        }
+        if (sourceUrl.startsWith('blob:')) URL.revokeObjectURL(sourceUrl);
+        resolve();
+      };
+      img.onerror = reject;
+      img.src = sourceUrl;
+    });
+  } catch {
+    const a = document.createElement('a');
+    a.href = imageUrl;
+    a.download = `${safeName}.png`;
+    a.click();
+  }
+}
+
+const ChartCard: React.FC<{
+  chart: ReportChart;
+  timeSeries?: ExtractedTimeSeries | null;
+  onZoom?: () => void;
+}> = ({ chart, timeSeries, onZoom }) => {
+  const [viewMode, setViewMode] = useState<'recharts' | 'image'>(
+    timeSeries ? 'recharts' : 'image'
+  );
+  const [downloadedStatic, setDownloadedStatic] = useState(false);
+
+  const handleDownloadStatic = async () => {
+    if (!chart.image) return;
+    await downloadStaticChartImageAsPng(chart.image, chart.title);
+    setDownloadedStatic(true);
+    setTimeout(() => setDownloadedStatic(false), 2000);
+  };
+
+  // If time-series data is present and interactive mode is chosen (or no static image exists)
+  if (timeSeries && (viewMode === 'recharts' || !chart.image)) {
+    return (
+      <div className="relative group">
+        {chart.image && (
+          <div className="absolute right-14 top-3.5 z-10 flex items-center bg-white/95 backdrop-blur-xs rounded-lg p-0.5 border border-neutral-200 shadow-2xs">
+            <button
+              onClick={() => setViewMode('recharts')}
+              className={`px-2 py-0.5 text-[11px] font-semibold rounded-md transition cursor-pointer ${
+                viewMode === 'recharts'
+                  ? 'bg-neutral-900 text-white'
+                  : 'text-neutral-600 hover:text-neutral-900'
+              }`}
+            >
+              Interactive Trend
+            </button>
+            <button
+              onClick={() => setViewMode('image')}
+              className={`px-2 py-0.5 text-[11px] font-semibold rounded-md transition cursor-pointer ${
+                viewMode === 'image'
+                  ? 'bg-neutral-900 text-white'
+                  : 'text-neutral-600 hover:text-neutral-900'
+              }`}
+            >
+              Static Plot
+            </button>
+          </div>
+        )}
+        <TimeSeriesTrendChart
+          timeSeries={timeSeries}
+          caption={chart.caption}
+          height={280}
+          onZoom={onZoom}
+        />
+      </div>
+    );
+  }
+
+  return (
+    <figure className="overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm flex flex-col group transition hover:border-neutral-300 relative">
+      <div className="px-4 py-3 border-b border-neutral-100 bg-neutral-50/60 flex items-center justify-between gap-2">
+        <div className="min-w-0">
+          <p className="text-sm font-bold text-neutral-800 truncate">{chart.title}</p>
+          {chart.caption && (
+            <p className="mt-0.5 text-xs text-neutral-500 truncate">{chart.caption}</p>
+          )}
+        </div>
+        <div className="flex items-center gap-1.5 shrink-0">
+          {timeSeries && (
+            <button
+              type="button"
+              onClick={() => setViewMode('recharts')}
+              className="px-2.5 py-1.5 text-xs font-semibold rounded-lg bg-blue-50 text-io-blue hover:bg-blue-100 transition flex items-center gap-1 cursor-pointer whitespace-nowrap shrink-0"
+            >
+              <LineChartIcon className="h-3.5 w-3.5" />
+              <span>Trend Line</span>
+            </button>
+          )}
+          {chart.image && (
+            <button
+              type="button"
+              onClick={handleDownloadStatic}
+              className="px-2.5 py-1.5 rounded-lg border border-neutral-200 bg-white hover:bg-neutral-100 text-neutral-700 hover:text-neutral-900 text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer whitespace-nowrap shrink-0"
+              title="Download current chart visualization as PNG"
+            >
+              {downloadedStatic ? (
+                <>
+                  <Check className="h-3.5 w-3.5 text-emerald-600" />
+                  <span>Saved PNG</span>
+                </>
+              ) : (
+                <>
+                  <Download className="h-3.5 w-3.5 text-io-blue" />
+                  <span>Download Chart</span>
+                </>
+              )}
+            </button>
+          )}
+          {onZoom && (
+            <button
+              type="button"
+              onClick={onZoom}
+              className="px-2.5 py-1.5 rounded-lg border border-neutral-200 bg-white hover:bg-neutral-100 text-neutral-600 hover:text-neutral-900 text-xs font-semibold transition cursor-pointer whitespace-nowrap shrink-0"
+              title="Zoom Chart"
+            >
+              Zoom
+            </button>
+          )}
+        </div>
+      </div>
+      <div className="relative bg-white p-3 flex-1 flex items-center justify-center min-h-[220px]">
+        <ChartImage src={chart.image || ''} alt={chart.title} className="w-full h-auto max-h-72 object-contain mx-auto" />
+      </div>
+    </figure>
+  );
+};
 
 const DataTable: React.FC<{ table: ReportTable; searchQuery?: string }> = ({ table, searchQuery = '' }) => {
+  const [showTrendChart, setShowTrendChart] = useState(false);
+  const timeSeries = useMemo(() => {
+    return isTimeSeriesTable(table) ? extractTimeSeriesFromTable(table) : null;
+  }, [table]);
+
   const filteredRows = useMemo(() => {
     if (!searchQuery.trim()) return table.rows;
     const lower = searchQuery.toLowerCase();
@@ -2460,10 +3187,32 @@ const DataTable: React.FC<{ table: ReportTable; searchQuery?: string }> = ({ tab
           <p className="text-sm font-bold text-neutral-800">{table.title}</p>
           {table.caption && <p className="mt-0.5 text-xs text-neutral-500">{table.caption}</p>}
         </div>
-        <span className="text-xs font-mono text-neutral-400 bg-neutral-100 px-2.5 py-1 rounded-lg">
-          {filteredRows.length} {filteredRows.length === 1 ? 'row' : 'rows'}
-        </span>
+        <div className="flex items-center gap-2">
+          {timeSeries && (
+            <button
+              onClick={() => setShowTrendChart(!showTrendChart)}
+              className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold border transition cursor-pointer ${
+                showTrendChart
+                  ? 'bg-neutral-900 text-white border-neutral-900'
+                  : 'bg-white text-io-blue border-blue-200 hover:bg-blue-50'
+              }`}
+            >
+              <TrendingUp className="h-3.5 w-3.5" />
+              <span>{showTrendChart ? 'Hide Trend Line' : 'Trend Line Chart'}</span>
+            </button>
+          )}
+          <span className="text-xs font-mono text-neutral-400 bg-neutral-100 px-2.5 py-1 rounded-lg">
+            {filteredRows.length} {filteredRows.length === 1 ? 'row' : 'rows'}
+          </span>
+        </div>
       </div>
+
+      {showTrendChart && timeSeries && (
+        <div className="p-4 border-b border-neutral-200 bg-neutral-50/40">
+          <TimeSeriesTrendChart timeSeries={timeSeries} height={280} compact />
+        </div>
+      )}
+
       <div className="overflow-x-auto max-h-[500px]">
         <table className="w-full text-xs sm:text-sm">
           <thead className="sticky top-0 z-10 bg-neutral-100 shadow-xs">
@@ -2498,5 +3247,6 @@ const DataTable: React.FC<{ table: ReportTable; searchQuery?: string }> = ({ tab
 };
 
 export default App;
+
 
 

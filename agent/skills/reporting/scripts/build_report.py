@@ -174,27 +174,61 @@ def infer_chart_type(chart):
         return "line"
     if any(token in text for token in ("share", "distribution", "composition", "mix")):
         return "pie"
-    return "bar"
+def is_temporal_name(name):
+    lower = str(name).lower()
+    return any(token in lower for token in ("date", "time", "year", "month", "day", "quarter", "period", "week", "timestamp", "datetime", "hour", "step", "fy"))
 
 
-def extract_limitation(tables):
-    """Return a structured limitation when a turn cannot answer the question."""
-    for name, df in tables.items():
-        if "limitation" not in name.lower() or df.empty:
-            continue
-        row = df.iloc[0]
-        limitation = str(row.get(
-            "limitation",
-            "The question could not be answered from the available dataset.",
-        ))
-        detail = str(row.get("detail", "")).strip()
-        required_data = str(row.get("required_data", "")).strip()
-        return {
-            "limitation": limitation,
-            "detail": detail,
-            "required_data": required_data,
-        }
-    return None
+def enrich_chart_entry(c, tables):
+    chart_type = infer_chart_type(c)
+    base_file = os.path.splitext(os.path.basename(c.get("file", "")))[0].lower()
+    title_norm = c.get("title", "").lower()
+    
+    # Try finding matching table
+    matching_df = None
+    for tbl_name, df in tables.items():
+        tbl_norm = tbl_name.lower()
+        if tbl_norm == base_file or tbl_norm in base_file or base_file in tbl_norm or tbl_norm in title_norm:
+            matching_df = df
+            break
+            
+    is_time_series = chart_type == "line" or any(token in f"{base_file} {title_norm}" for token in ("trend", "over time", "monthly", "yearly", "timeline", "progress"))
+    data_points = None
+    time_key = None
+    metric_keys = []
+    
+    if matching_df is not None and not matching_df.empty:
+        cols = list(matching_df.columns)
+        num_cols = list(matching_df.select_dtypes(include="number").columns)
+        
+        # Check if first column or any column is temporal
+        temporal_col = None
+        for col in cols:
+            if is_temporal_name(col):
+                temporal_col = col
+                break
+        if temporal_col is None and cols and cols[0] not in num_cols:
+            temporal_col = cols[0]
+            
+        if temporal_col:
+            is_time_series = True
+            time_key = str(temporal_col)
+            metric_keys = [str(c) for c in num_cols if c != temporal_col]
+            preview = matching_df.head(MAX_TABLE_ROWS)
+            data_points = preview.astype(object).where(pd.notna(preview), None).to_dict(orient="records")
+
+    entry = {
+        "title": c["title"],
+        "file": c["file"],
+        "caption": "",
+        "type": chart_type,
+        "isTimeSeries": is_time_series,
+    }
+    if data_points:
+        entry["data"] = data_points
+        entry["timeKey"] = time_key
+        entry["metricKeys"] = metric_keys
+    return entry
 
 
 def build_report(question, dataset_name, profile, tables, charts):
@@ -232,12 +266,7 @@ def build_report(question, dataset_name, profile, tables, charts):
         "executive_summary": executive_summary,
         "insights": insights,
         "charts": [
-            {
-                "title": c["title"],
-                "file": c["file"],
-                "caption": "",
-                "type": infer_chart_type(c),
-            }
+            enrich_chart_entry(c, tables)
             for c in charts
         ],
         "tables": build_display_tables(tables),

@@ -12,6 +12,10 @@ export interface ReportChart {
   type?: string;
   /** Base64 data URL injected by the server after extracting the PNG from the sandbox. */
   image?: string;
+  data?: Array<Record<string, any>>;
+  timeKey?: string;
+  metricKeys?: string[];
+  isTimeSeries?: boolean;
 }
 
 export interface ReportTable {
@@ -62,6 +66,127 @@ export interface UploadedFile {
   size?: number;
   driveId?: string;
   mimeType?: string;
+}
+
+export type InfographicFormat = 'portrait' | 'landscape' | 'social';
+export type InfographicTheme = 'executive-dark' | 'editorial-light' | 'io-cobalt' | 'swiss-minimal';
+export type McpDesignToolId = 'mcp-canva' | 'mcp-figma' | 'mcp-vega';
+
+export interface InfographicOptions {
+  format: InfographicFormat;
+  theme: InfographicTheme;
+  mcpToolId: McpDesignToolId;
+  customFocus?: string;
+}
+
+export interface InfographicAgentStep {
+  id: string;
+  phase: string;
+  toolUri: string;
+  summary: string;
+  status: 'pending' | 'running' | 'completed' | 'error';
+  durationMs?: number;
+}
+
+export interface InfographicBlueprint {
+  headline: string;
+  subheadline: string;
+  storyArc: string;
+  heroStat: {
+    label: string;
+    value: string;
+    delta: string;
+    context: string;
+  };
+  kpiCards: Array<{
+    metric: string;
+    value: string;
+    insight: string;
+    trend: 'up' | 'down' | 'neutral';
+  }>;
+  chartSection: {
+    title: string;
+    subtitle: string;
+    chartType: 'line' | 'bar' | 'area';
+    isTimeSeries: boolean;
+    trendSummary?: string;
+    dataPoints: Array<{
+      label: string;
+      value: number;
+      formattedValue: string;
+    }>;
+  };
+  keyTakeaways: Array<{
+    index: string;
+    title: string;
+    detail: string;
+  }>;
+  strategicActions: string[];
+  footerNote: string;
+  mcpMetadata: {
+    serverUri: string;
+    toolName: string;
+    protocolVersion: string;
+    layoutEngine: string;
+    synthesizedAt: string;
+    mcpPayload: Record<string, unknown>;
+  };
+}
+
+export type SocialPlatform = 'twitter' | 'linkedin';
+export type SocialTone = 'executive' | 'storytelling' | 'metrics-first' | 'thought-leadership';
+
+export interface SocialDraftOptions {
+  platform: SocialPlatform;
+  tone: SocialTone;
+  customAngle?: string;
+  includeThread: boolean;
+  attachVisualCard: boolean;
+}
+
+export interface SocialDraft {
+  platform: SocialPlatform;
+  hook: string;
+  body: string;
+  threadItems: string[];
+  hashtags: string[];
+  callToAction: string;
+  bestTimeWindow: string;
+  recommendedIsoSlot: string;
+  engagementRationale: string;
+  attachedMetrics: Array<{
+    label: string;
+    value: string;
+  }>;
+}
+
+export interface SocialCampaignPackage {
+  campaignTitle: string;
+  narrativeAngle: string;
+  twitter: SocialDraft;
+  linkedin: SocialDraft;
+  mcpMetadata: {
+    connectorUri: string;
+    toolName: string;
+    generatedAt: string;
+  };
+}
+
+export interface ScheduledSocialPost {
+  id: string;
+  platform: SocialPlatform;
+  datasetName: string;
+  status: 'scheduled' | 'published';
+  scheduledFor: string;
+  content: string;
+  threadItems: string[];
+  hashtags: string[];
+  attachVisualCard: boolean;
+  dispatchReceipt: {
+    queueId: string;
+    connectorUri: string;
+    timestamp: string;
+  };
 }
 
 declare global {
